@@ -50,7 +50,9 @@ function setupQuadDoH {
 # Step 8: Reset DNS to original value
 function resetDoH {
     # Reset DNS server value back to original
-    Set-DnsClientServerAddress -InterfaceAlias "Ethernet 3" -ServerAddresses $originalDnsServer
+    $interfaceAlias = "Ethernet 3"
+    $dnsReset = "10.0.2.3"
+    Set-DnsClientServerAddress -InterfaceAlias $interfaceAlias -ServerAddresses $dnsReset
 
     Write-Output "DNS server reset to original value."
 }
