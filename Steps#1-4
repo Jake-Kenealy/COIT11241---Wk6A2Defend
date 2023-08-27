@@ -1,0 +1,21 @@
+# Step 3: Pre-test - Define the function testDNSBlock()
+function testDNSBlock {
+    # Output the original DNS server of Ethernet 3 NIC
+    $originalDnsServer = Get-DnsClientServerAddress -InterfaceAlias "Ethernet 3" |
+                         Select-Object -ExpandProperty ServerAddresses
+
+    Write-Output "Original DNS Server: $originalDnsServer"
+
+    # Determine the IP address of malware.testcategory.com
+    $malwareIpAddress = Resolve-DnsName -Name "malware.testcategory.com" |
+                        Where-Object { $_.IPAddress -ne "0.0.0.0" } |
+                        Select-Object -ExpandProperty IPAddress
+
+    if ($malwareIpAddress) {
+        Write-Output "DNS Filtering Not Active: Malware IP Address is $malwareIpAddress"
+    } else {
+        Write-Output "DNS Filtering Active: Malware IP Address is blocked"
+    }
+}
+
+testDNSBlock
