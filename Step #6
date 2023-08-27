@@ -7,14 +7,19 @@ function testDNSBlock {
     Write-Output "Original DNS Server: $originalDnsServer"
 
     # Determine the IP address of malware.testcategory.com
-    $malwareIpAddress = Resolve-DnsName -Name "malware.testcategory.com" |
-                        Where-Object { $_.IPAddress -ne "0.0.0.0" } |
-                        Select-Object -ExpandProperty IPAddress
+    try {
+        $malwareHost = "malware.testcategory.com"
+        $malwareIp = [System.Net.Dns]::GetHostAddresses($malwareHost) |
+                     Select-Object -ExpandProperty IPAddressToString
 
-    if ($malwareIpAddress) {
-        Write-Output "DNS Filtering Not Active: Malware IP Address is $malwareIpAddress"
-    } else {
-        Write-Output "DNS Filtering Active: Malware IP Address is blocked"
+        if ($malwareIp -contains "0.0.0.0") {
+            Write-Output "DNS filtering is active."
+        } else {
+            Write-Output "DNS filtering is not active. Malware IP: $($malwareIp -join ', ')"
+        }
+
+    } catch {
+        Write-Output "Unable to resolve malware host."
     }
 }
 
@@ -31,22 +36,25 @@ function enableDoH {
 
 # Step 6: Setup Quad DoH
 function setupQuadDoH {
-    # Change DNS server of Ethernet 3 to 1.1.1.2
-    Set-DnsClientServerAddress -InterfaceAlias "Ethernet 3" -ServerAddresses "1.1.1.2"
+    $interfaceAlias = "Ethernet 3"
+    $dnsServer = "1.1.1.2"
+    $dnsQueryUri = "https://security.cloudflare-dns.com/dns-query"
+    
+    # Change DNS server of Ethernet 3 to Cloudflare's DNS server
+    Set-DnsClientServerAddress -InterfaceAlias $interfaceAlias -ServerAddresses $dnsServer
 
     # Register the DoH template
-    Add-DnsClientDohServerAddress -ServerAddress "1.1.1.2" `
-        -Uri "https://security.cloudflare-dns.com/dns-query" `
-        -AutoUpgrade $true
+    $doHServer = Add-DnsClientDohServerAddress -ServerAddress $dnsServer -Uri $dnsQueryUri -AutoUpgrade $true
 
     # Enable DoH on Ethernet 3 using the registry
-    $guid = (Get-NetAdapter -InterfaceAlias "Ethernet 3").InterfaceGuid
-    $registryPath = "HKLM:\System\CurrentControlSet\Services\Dnscache\InterfaceSpecificParameters\$guid\DohInterfaceSettings\Doh\1.1.1.2"
+    $interfaceGuid = (Get-NetAdapter -InterfaceAlias $interfaceAlias).InterfaceGuid
+    $registryPath = "HKLM:\System\CurrentControlSet\Services\Dnscache\InterfaceSpecificParameters\$interfaceGuid\DohInterfaceSettings\Doh\$dnsServer"
     Set-ItemProperty -Path $registryPath -Name "DohFlags" -Value 1
 
     Write-Output "Quad DoH setup completed."
+    Write-Output "DoH Server: $($doHServer.InterfaceAlias) - $dnsServer"
+    Write-Output "DoH Query URI: $dnsQueryUri"
 }
-
 # Main script
 
 # Check the first argument and perform corresponding action
