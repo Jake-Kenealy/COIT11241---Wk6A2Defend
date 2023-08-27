@@ -1,0 +1,41 @@
+# Step 3: Pre-test - Define the function testDNSBlock()
+function testDNSBlock {
+    # Output the original DNS server of Ethernet 3 NIC
+    $originalDnsServer = Get-DnsClientServerAddress -InterfaceAlias "Ethernet 3" |
+                         Select-Object -ExpandProperty ServerAddresses
+
+    Write-Output "Original DNS Server: $originalDnsServer"
+
+    # Determine the IP address of malware.testcategory.com
+    $malwareIpAddress = Resolve-DnsName -Name "malware.testcategory.com" |
+                        Where-Object { $_.IPAddress -ne "0.0.0.0" } |
+                        Select-Object -ExpandProperty IPAddress
+
+    if ($malwareIpAddress) {
+        Write-Output "DNS Filtering Not Active: Malware IP Address is $malwareIpAddress"
+    } else {
+        Write-Output "DNS Filtering Active: Malware IP Address is blocked"
+    }
+}
+
+function enableDoH {
+    # Set the EnableAutoDoH registry value to 2
+    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" -Name "EnableAutoDoH" -Value 2
+
+    Write-Host "DNS over HTTPS (DoH) enabled. Rebooting the computer..."
+
+    # Initiate a system reboot
+    Restart-Computer -Force
+}
+
+# Main script
+
+# Check the first argument and perform corresponding action
+$argument = $args[0]
+
+if ($argument -eq "DoH-test") {
+    testDNSBlock
+} elseif ($argument -eq "DoH-enable") {
+    enableDoH
+
+}
