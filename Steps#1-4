@@ -7,14 +7,19 @@ function testDNSBlock {
     Write-Output "Original DNS Server: $originalDnsServer"
 
     # Determine the IP address of malware.testcategory.com
-    $malwareIpAddress = Resolve-DnsName -Name "malware.testcategory.com" |
-                        Where-Object { $_.IPAddress -ne "0.0.0.0" } |
-                        Select-Object -ExpandProperty IPAddress
+    try {
+        $malwareHost = "malware.testcategory.com"
+        $malwareIp = [System.Net.Dns]::GetHostAddresses($malwareHost) |
+                     Select-Object -ExpandProperty IPAddressToString
 
-    if ($malwareIpAddress) {
-        Write-Output "DNS Filtering Not Active: Malware IP Address is $malwareIpAddress"
-    } else {
-        Write-Output "DNS Filtering Active: Malware IP Address is blocked"
+        if ($malwareIp -contains "0.0.0.0") {
+            Write-Output "DNS filtering is active."
+        } else {
+            Write-Output "DNS filtering is not active. Malware IP: $($malwareIp -join ', ')"
+        }
+
+    } catch {
+        Write-Output "Unable to resolve malware host."
     }
 }
 
