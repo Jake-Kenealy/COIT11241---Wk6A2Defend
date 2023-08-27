@@ -22,7 +22,7 @@ function enableDoH {
     # Set the EnableAutoDoH registry value to 2
     Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" -Name "EnableAutoDoH" -Value 2
 
-    Write-Host "DNS over HTTPS (DoH) enabled. Rebooting the computer..."
+    Write-Output "DNS over HTTPS (DoH) enabled. Rebooting the computer..."
 
     # Initiate a system reboot
     Restart-Computer -Force
