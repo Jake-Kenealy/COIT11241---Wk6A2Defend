@@ -1,0 +1,133 @@
+# Step 3: Pre-test - Define the function testDNSBlock()
+function testDNSBlock {
+    # Output the original DNS server of Ethernet 3 NIC
+    $originalDnsServer = Get-DnsClientServerAddress -InterfaceAlias "Ethernet 3" |
+                         Select-Object -ExpandProperty ServerAddresses
+
+    Write-Output "Original DNS Server: $originalDnsServer"
+
+    # Determine the IP address of malware.testcategory.com
+    try {
+        $malwareHost = "malware.testcategory.com"
+        $malwareIp = [System.Net.Dns]::GetHostAddresses($malwareHost) |
+                     Select-Object -ExpandProperty IPAddressToString
+
+        if ($malwareIp -contains "0.0.0.0") {
+            Write-Output "DNS filtering is active."
+        } else {
+            Write-Output "DNS filtering is not active. Malware IP: $($malwareIp -join ', ')"
+        }
+
+    } catch {
+        Write-Output "Unable to resolve malware host."
+    }
+}
+
+# Step 5: Enable DNS over HTTPS (DoH) on Windows 11
+function enableDoH {
+    # Set the EnableAutoDoH registry value to 2
+    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" -Name "EnableAutoDoH" -Value 2
+
+    Write-Output "DNS over HTTPS (DoH) enabled. Rebooting the computer..."
+
+    # Initiate a system reboot
+    Restart-Computer -Force
+}
+
+# Step 6: Setup Quad DoH
+function setupQuadDoH {
+    $interfaceAlias = "Ethernet 3"
+    $dnsServer = "1.1.1.2"
+    $dnsQueryUri = "https://security.cloudflare-dns.com/dns-query"
+    
+    # Change DNS server of Ethernet 3 to Cloudflare's DNS server
+    Set-DnsClientServerAddress -InterfaceAlias $interfaceAlias -ServerAddresses $dnsServer
+
+    # Register the DoH template
+    $doHServer = Add-DnsClientDohServerAddress -ServerAddress $dnsServer -Uri $dnsQueryUri -AutoUpgrade $true
+
+    # Enable DoH on Ethernet 3 using the registry
+    $interfaceGuid = (Get-NetAdapter -InterfaceAlias $interfaceAlias).InterfaceGuid
+    $registryPath = "HKLM:\System\CurrentControlSet\Services\Dnscache\InterfaceSpecificParameters\$interfaceGuid\DohInterfaceSettings\Doh\$dnsServer"
+    Set-ItemProperty -Path $registryPath -Name "DohFlags" -Value 1
+
+    Write-Output "Quad DoH setup completed."
+    Write-Output "DoH Server: $($doHServer.InterfaceAlias) - $dnsServer"
+    Write-Output "DoH Query URI: $dnsQueryUri"
+}
+
+# Step 8: Reset DNS to original value
+function resetDoH {
+    # Reset DNS server value back to original
+    $interfaceAlias = "Ethernet 3"
+    $dnsReset = "10.0.2.3"
+    Set-DnsClientServerAddress -InterfaceAlias $interfaceAlias -ServerAddresses $dnsReset
+
+    Write-Output "DNS server reset to original value."
+}
+
+
+
+# Function to configure Windows 11 firewall to block outbound HTTP (TCP port 80) traffic
+function blockHttpTraffic {
+    $ruleName = "Block-Outbound-HTTP-Traffic"
+    
+    # Check if the rule already exists
+    $existingRule = Get-NetFirewallRule | Where-Object { $_.Name -eq $ruleName }
+
+    if (!$existingRule) {
+        New-NetFirewallRule -DisplayName $ruleName -Direction Outbound -Action Block -Protocol TCP -LocalPort 80
+        Write-Output "Firewall rule to block outbound HTTP traffic created."
+    } else {
+        Write-Output "Firewall rule to block outbound HTTP traffic already exists."
+    }
+}
+
+# Function to test if TCP port 80 (HTTP) traffic is blocked
+function testHttpTrafficBlocked {
+    $tcp80Blocked = Test-NetConnection -ComputerName google.com -Port 80
+
+    if ($tcp80Blocked.TcpTestSucceeded) {
+        Write-Output "TCP port 80 (HTTP) traffic is not blocked."
+    } else {
+        Write-Output "TCP port 80 (HTTP) traffic is blocked."
+    }
+}
+
+# Function to disable the firewall rule that blocks outbound HTTP traffic
+function disableHttpTrafficBlock {
+    $ruleName = "{8b4666b6-546e-4af5-b981-52ebb979e70a}"
+    
+    $existingRule = Get-NetFirewallRule | Where-Object { $_.Name -eq $ruleName }
+
+    if ($existingRule) {
+        Disable-NetFirewallRule -Name $ruleName
+        Write-Output "Firewall rule to block outbound HTTP traffic disabled."
+    } else {
+        Write-Output "Firewall rule to block outbound HTTP traffic doesn't exist."
+    }
+}
+
+
+
+
+# Main script
+
+# Check the first argument and perform corresponding action
+$argument = $args[0]
+
+if ($argument -eq "DoH-test") {
+    testDNSBlock
+} elseif ($argument -eq "DoH-enable") {
+    enableDoH
+} elseif ($argument -eq "DoH-setupQuad") {
+    setupQuadDoH
+} elseif ($argument -eq "DoH-reset") {
+    resetDoH
+} elseif ($argument -eq "HTTP-block") {
+    blockHttpTraffic
+} elseif ($argument -eq "HTTP-test") {
+    testHttpTrafficBlocked
+} elseif ($argument -eq "HTTP-disable") {
+    disableHttpTrafficBlock
+}
